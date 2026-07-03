@@ -1,0 +1,15 @@
+node_modules/
+dist/
+build/
+.env
+.env.local
+*.log
+npm-debug.log*
+coverage/
+.expo/
+*.tsbuildinfo
+.DS_Store
+ios/
+android/
+web-build/
+.turbo
