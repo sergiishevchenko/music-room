@@ -1,0 +1,248 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String    @id @default(uuid())
+  email         String    @unique
+  passwordHash  String?
+  name          String
+  avatar        String?
+  googleId      String?   @unique
+  facebookId    String?   @unique
+  emailVerified Boolean   @default(false)
+  verifyToken   String?
+  resetToken    String?
+  resetTokenExp DateTime?
+  publicInfo    Json?     @default("{}")
+  friendsInfo   Json?     @default("{}")
+  privateInfo   Json?     @default("{}")
+  musicPrefs    Json?     @default("{}")
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  sentRequests        Friendship[]           @relation("requester")
+  receivedRequests    Friendship[]           @relation("addressee")
+  createdEvents       Event[]                @relation("eventCreator")
+  eventInvites        EventInvite[]
+  votes               Vote[]
+  eventTracks         EventTrack[]
+  createdPlaylists    Playlist[]             @relation("playlistCreator")
+  collaborations      PlaylistCollaborator[]
+  playlistTracks      PlaylistTrack[]
+  devices             Device[]
+  delegationsGiven    ControlDelegation[]    @relation("delegationOwner")
+  delegationsReceived ControlDelegation[]    @relation("delegationDelegate")
+  actionLogs          ActionLog[]
+  subscription        Subscription?
+  pushTokens          PushToken[]
+}
+
+model Friendship {
+  id          String   @id @default(uuid())
+  requesterId String
+  addresseeId String
+  status      String   @default("pending")
+  createdAt   DateTime @default(now())
+
+  requester User @relation("requester", fields: [requesterId], references: [id])
+  addressee User @relation("addressee", fields: [addresseeId], references: [id])
+
+  @@unique([requesterId, addresseeId])
+}
+
+model Event {
+  id          String    @id @default(uuid())
+  name        String
+  description String?
+  creatorId   String
+  isPublic    Boolean   @default(true)
+  licenseType String    @default("open")
+  latitude    Float?
+  longitude   Float?
+  radius      Float?
+  timeStart   DateTime?
+  timeEnd     DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  creator User          @relation("eventCreator", fields: [creatorId], references: [id])
+  tracks  EventTrack[]
+  invites EventInvite[]
+  votes   Vote[]
+  beacon  EventBeacon?
+}
+
+model EventTrack {
+  id         String   @id @default(uuid())
+  eventId    String
+  addedById  String
+  title      String
+  artist     String
+  album      String?
+  coverUrl   String?
+  previewUrl String?
+  externalId String?
+  voteCount  Int      @default(0)
+  position   Int      @default(0)
+  createdAt  DateTime @default(now())
+
+  event   Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  addedBy User   @relation(fields: [addedById], references: [id])
+  votes   Vote[]
+
+  @@unique([eventId, externalId])
+}
+
+model Vote {
+  id        String   @id @default(uuid())
+  eventId   String
+  trackId   String
+  userId    String
+  createdAt DateTime @default(now())
+
+  event Event      @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  track EventTrack @relation(fields: [trackId], references: [id], onDelete: Cascade)
+  user  User       @relation(fields: [userId], references: [id])
+
+  @@unique([eventId, trackId, userId])
+}
+
+model EventInvite {
+  id        String   @id @default(uuid())
+  eventId   String
+  userId    String
+  createdAt DateTime @default(now())
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id])
+
+  @@unique([eventId, userId])
+}
+
+model Playlist {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  creatorId   String
+  isPublic    Boolean  @default(true)
+  licenseType String   @default("open")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  creator       User                   @relation("playlistCreator", fields: [creatorId], references: [id])
+  tracks        PlaylistTrack[]
+  collaborators PlaylistCollaborator[]
+}
+
+model PlaylistTrack {
+  id         String   @id @default(uuid())
+  playlistId String
+  addedById  String
+  title      String
+  artist     String
+  album      String?
+  coverUrl   String?
+  previewUrl String?
+  externalId String?
+  position   Int      @default(0)
+  createdAt  DateTime @default(now())
+
+  playlist Playlist @relation(fields: [playlistId], references: [id], onDelete: Cascade)
+  addedBy  User     @relation(fields: [addedById], references: [id])
+}
+
+model PlaylistCollaborator {
+  id         String   @id @default(uuid())
+  playlistId String
+  userId     String
+  role       String   @default("editor")
+  createdAt  DateTime @default(now())
+
+  playlist Playlist @relation(fields: [playlistId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id])
+
+  @@unique([playlistId, userId])
+}
+
+model Device {
+  id          String   @id @default(uuid())
+  userId      String
+  name        String
+  platform    String
+  deviceModel String?
+  appVersion  String?
+  createdAt   DateTime @default(now())
+
+  user        User                @relation(fields: [userId], references: [id])
+  delegations ControlDelegation[]
+}
+
+model ControlDelegation {
+  id         String    @id @default(uuid())
+  ownerId    String
+  delegateId String
+  deviceId   String
+  isActive   Boolean   @default(true)
+  createdAt  DateTime  @default(now())
+  expiresAt  DateTime?
+
+  owner    User   @relation("delegationOwner", fields: [ownerId], references: [id])
+  delegate User   @relation("delegationDelegate", fields: [delegateId], references: [id])
+  device   Device @relation(fields: [deviceId], references: [id])
+
+  @@unique([ownerId, deviceId, delegateId])
+}
+
+model ActionLog {
+  id          String   @id @default(uuid())
+  userId      String?
+  action      String
+  details     Json?
+  platform    String?
+  deviceModel String?
+  appVersion  String?
+  ipAddress   String?
+  createdAt   DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id])
+}
+
+model Subscription {
+  id        String    @id @default(uuid())
+  userId    String    @unique
+  plan      String    @default("free")
+  startedAt DateTime  @default(now())
+  expiresAt DateTime?
+  isActive  Boolean   @default(true)
+
+  user User @relation(fields: [userId], references: [id])
+}
+
+model EventBeacon {
+  id        String   @id @default(uuid())
+  eventId   String   @unique
+  uuid      String
+  major     Int
+  minor     Int
+  createdAt DateTime @default(now())
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+}
+
+model PushToken {
+  id        String   @id @default(uuid())
+  userId    String
+  token     String
+  platform  String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, token])
+}
